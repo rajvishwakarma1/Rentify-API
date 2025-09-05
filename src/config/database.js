@@ -5,7 +5,12 @@ const { initMongooseMonitor } = require('../utils/mongooseMonitor');
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017';
 const DB_NAME = process.env.DB_NAME || 'rentify';
 
+const MAX_RETRIES = Number(process.env.MONGODB_CONNECT_RETRIES || 10);
+const RETRY_DELAY_MS = Number(process.env.MONGODB_CONNECT_RETRY_DELAY_MS || 2000);
+
 let isConnecting = false;
+
+async function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
 
 async function connectDatabase() {
   if (mongoose.connection.readyState === 1 || isConnecting) return;
@@ -19,12 +24,34 @@ async function connectDatabase() {
     socketTimeoutMS: 45000,
     autoIndex: process.env.NODE_ENV !== 'production',
   };
-  try {
-  await mongoose.connect(uri, options);
-  initMongooseMonitor(mongoose);
-  } finally {
-    isConnecting = false;
+
+  let lastErr;
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      await mongoose.connect(uri, options);
+      initMongooseMonitor(mongoose);
+      logger.info('MongoDB connected');
+      lastErr = undefined;
+      break;
+    } catch (err) {
+      lastErr = err;
+      logger.warn('MongoDB connect attempt failed', { attempt, error: err && err.message ? err.message : String(err) });
+      if (attempt < MAX_RETRIES) {
+        await sleep(RETRY_DELAY_MS);
+      }
+    } finally {
+      if (mongoose.connection.readyState === 1) {
+        isConnecting = false;
+      }
+    }
   }
+
+  // If still not connected after retries, surface the last error
+  if (mongoose.connection.readyState !== 1 && lastErr) {
+    isConnecting = false;
+    throw lastErr;
+  }
+  isConnecting = false;
 }
 
 mongoose.connection.on('connected', () => logger.info('MongoDB connected'));
