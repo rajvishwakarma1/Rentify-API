@@ -1,5 +1,6 @@
 const express = require('express');
 const mongoose = require('mongoose');
+const { connectDatabase, getDbDiagnostics } = require('../config/database');
 
 const router = express.Router();
 
@@ -19,19 +20,20 @@ router.get('/', (req, res) => {
   });
 });
 
-router.get('/health', (req, res) => {
-  const dbState = mongoose.connection.readyState; // 0=disconnected,1=connected,2=connecting,3=disconnecting
-  const statusMap = { 0: 'disconnected', 1: 'connected', 2: 'connecting', 3: 'disconnecting' };
+router.get('/health', async (req, res) => {
+  // If not connected, trigger an async connect attempt (server, serverless parity)
+  const state = mongoose.connection.readyState;
+  if (state !== 1) {
+    connectDatabase().catch(() => {});
+  }
+  const diag = getDbDiagnostics();
   res.json({
     success: true,
     status: 'ok',
     uptime: process.uptime(),
     version: 'v1',
     requestId: req.id,
-    db: {
-      state: dbState,
-      status: statusMap[dbState] || 'unknown',
-    },
+    db: diag,
   });
 });
 
