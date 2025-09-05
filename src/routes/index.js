@@ -3,6 +3,22 @@ const mongoose = require('mongoose');
 
 const router = express.Router();
 
+// Root welcome
+router.get('/', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Rentify API',
+    version: 'v1',
+    links: {
+      health: '/health',
+      api: '/api/v1',
+      properties: '/api/v1/properties',
+      search: '/api/v1/search',
+    },
+    requestId: req.id,
+  });
+});
+
 router.get('/health', (req, res) => {
   const dbState = mongoose.connection.readyState; // 0=disconnected,1=connected,2=connecting,3=disconnecting
   const statusMap = { 0: 'disconnected', 1: 'connected', 2: 'connecting', 3: 'disconnecting' };
