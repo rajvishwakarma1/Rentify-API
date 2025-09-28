@@ -1,3 +1,8 @@
+
+require('dotenv').config();
+if (process.env.NODE_ENV === 'production' && !process.env.CORS_ORIGIN) {
+  console.error('WARNING: CORS_ORIGIN is not set in production. All cross-origin requests will be denied.');
+}
 const app = require('./app');
 
 const PORT = process.env.PORT || 3000;

@@ -20,9 +20,6 @@ app.use(helmet());
 
 // Environment-aware CORS configuration
 const isProd = process.env.NODE_ENV === 'production';
-if (isProd && !process.env.CORS_ORIGIN) {
-  throw new Error('CORS_ORIGIN must be set in production environment');
-}
 const corsOptions = {
   origin: (origin, cb) => {
     if (!process.env.CORS_ORIGIN) {
@@ -37,11 +34,13 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 // Morgan token for request ID and environment-aware log format
-morgan.token('id', (req) => req.id);
-const morganFormat = isProd
-  ? ':id :remote-addr :method :url :status :res[content-length] - :response-time ms :user-agent'
-  : ':id :method :url :status :res[content-length] - :response-time ms';
-app.use(morgan(morganFormat));
+morgan.token('id', req => req.id);
+if (isProd) {
+  // Prefix :id to the standard combined format
+  app.use(morgan(':id :remote-addr :remote-user [:date[clf]] ":method :url HTTP/:http-version" :status :res[content-length] ":referrer" ":user-agent"'));
+} else {
+  app.use(morgan(':id :method :url :status :res[content-length] - :response-time ms'));
+}
 
 // Middleware: Request parsing
 app.use(express.json());
@@ -57,8 +56,8 @@ app.get('/', (req, res) => {
   });
 });
 
-// API versioning (routes to be added in future phases)
-// app.use('/api/v1', require('./routes'));
+// API versioning
+app.use('/api/v1', require('./routes'));
 
 // 404 handler
 app.use((req, res, next) => {
