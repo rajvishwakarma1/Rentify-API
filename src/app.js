@@ -3,6 +3,8 @@ const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
 const morgan = require('morgan');
+const logger = require('./utils/logger');
+const { errorHandler } = require('./middleware/errorHandler');
 const { v4: uuidv4 } = require('uuid');
 
 const app = express();
@@ -36,10 +38,10 @@ app.use(cors(corsOptions));
 // Morgan token for request ID and environment-aware log format
 morgan.token('id', req => req.id);
 if (isProd) {
-  // Prefix :id to the standard combined format
-  app.use(morgan(':id :remote-addr :remote-user [:date[clf]] ":method :url HTTP/:http-version" :status :res[content-length] ":referrer" ":user-agent"'));
+  // Use enhanced logger for production
+  app.use(logger.morgan);
 } else {
-  app.use(morgan(':id :method :url :status :res[content-length] - :response-time ms'));
+  app.use(logger.morgan);
 }
 
 // Middleware: Request parsing
@@ -59,23 +61,16 @@ app.get('/', (req, res) => {
 // API versioning
 app.use('/api/v1', require('./routes'));
 
-// 404 handler
+
+// 404 handler (enhanced)
 app.use((req, res, next) => {
-  res.status(404).json({
-    error: 'Not Found',
-    message: 'The requested resource does not exist.',
-    requestId: req.id
-  });
+  const err = new Error('The requested resource does not exist.');
+  err.status = 404;
+  err.type = 'not_found';
+  next(err);
 });
 
-// Error handler
-app.use((err, req, res, next) => {
-  console.error(`[${req.id}]`, err);
-  res.status(err.status || 500).json({
-    error: 'Internal Server Error',
-    message: err.message || 'An unexpected error occurred.',
-    requestId: req.id
-  });
-});
+// Centralized error handler (last)
+app.use(errorHandler);
 
 module.exports = app;
